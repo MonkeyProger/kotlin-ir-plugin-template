@@ -20,15 +20,52 @@ import org.jetbrains.kotlin.backend.common.extensions.IrGenerationExtension
 import org.jetbrains.kotlin.backend.common.extensions.IrPluginContext
 import org.jetbrains.kotlin.cli.common.messages.CompilerMessageSeverity
 import org.jetbrains.kotlin.cli.common.messages.MessageCollector
-import org.jetbrains.kotlin.ir.declarations.IrModuleFragment
+import org.jetbrains.kotlin.ir.IrElement
+import org.jetbrains.kotlin.ir.declarations.*
+import org.jetbrains.kotlin.ir.expressions.impl.IrCallImpl
+import org.jetbrains.kotlin.ir.util.dump
+import org.jetbrains.kotlin.ir.visitors.IrElementVisitor
+import org.jetbrains.kotlin.name.FqName
+import org.jetbrains.kotlin.org.fusesource.jansi.AnsiRenderer.render
+import java.io.File
 
 class TemplateIrGenerationExtension(
   private val messageCollector: MessageCollector,
+  private val functions: Set<FqName>,
   private val string: String,
-  private val file: String
 ) : IrGenerationExtension {
-  override fun generate(moduleFragment: IrModuleFragment, pluginContext: IrPluginContext) {
-    messageCollector.report(CompilerMessageSeverity.INFO, "Argument 'string' = $string")
-    messageCollector.report(CompilerMessageSeverity.INFO, "Argument 'file' = $file")
+    override fun generate(moduleFragment: IrModuleFragment, pluginContext: IrPluginContext) {
+      val typeAnyNullable = pluginContext.irBuiltIns.anyNType
+      println(moduleFragment.dump())
+      val debugLogAnnotation = pluginContext.referenceClass(FqName("DebugLog"))!!
+      val funPrintln = pluginContext.referenceFunctions(FqName("kotlin.io.println"))
+        .single {
+          val parameters = it.owner.valueParameters
+          parameters.size == 1 && parameters[0].type == typeAnyNullable
+        }
+      //moduleFragment.transform(DebugLogTransformer(pluginContext, debugLogAnnotation, funPrintln), null)
+
+      val bodySwapFirstAnnotation = pluginContext.referenceClass(FqName("From"))!!
+      val bodySwapSecondAnnotation = pluginContext.referenceClass(FqName("To"))!!
+      moduleFragment.transform(BodySwapper(pluginContext,bodySwapFirstAnnotation, bodySwapSecondAnnotation), null)
+
+  }
+
+
+  class RecursiveVisitor(
+  ) : IrElementVisitor<Unit, Nothing?> {
+    override fun visitElement(element: IrElement, data: Nothing?) {
+      println(element.toString())
+        //element.transform(Transorfmer(pluginContext), data)
+      element.acceptChildren(this, data)
+    }
+  }
+
+  class StringIndentVisitor : IrElementVisitor<Unit, String> {
+    override fun visitElement(element: IrElement, data: String) {
+        println("$data${render(element.toString())} {")
+        element.acceptChildren(this, "  $data")
+        println("$data}")
+    }
   }
 }

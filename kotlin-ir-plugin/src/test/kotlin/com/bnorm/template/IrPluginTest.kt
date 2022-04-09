@@ -28,15 +28,48 @@ class IrPluginTest {
     val result = compile(
       sourceFile = SourceFile.kotlin(
         "main.kt", """
+annotation class DebugLog
+annotation class From
+annotation class To
 fun main() {
-  println(debug())
+  println("In de benninging")
+  val m = 100
+  val p = 1 to 1
+println("Vars and body swap test:")
+first()
+second()
+println("Return type swap test:")
+println(firstRet())
+println(secondRet())
+  println(greet(name = "Kotlin IR"))
 }
-
-fun debug() = "Hello, World!"
+@From
+fun first(st: String = "Hello") {
+println("1st ${'$'}st, World!")
+}
+@To
+fun second(nd: String = "Not Hello") {
+println("2nd ${'$'}nd, World!")
+}
+@From
+fun firstRet(st: String = "String"): String {
+return "First fun must be ${'$'}st, not Int!"
+}
+@To
+fun secondRet(nd: Int = 100): Int {
+return nd
+}
+@DebugLog
+fun greet(greeting: String = "Hello", name: String = "World"): String {
+  return "${'$'}greeting, ${'$'}name!"
+}
 """
       )
     )
     assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode)
+    val kClazz = result.classLoader.loadClass("MainKt")
+    val main = kClazz.declaredMethods.single { it.name == "main" && it.parameterCount == 0 }
+    main.invoke(null)
   }
 }
 
